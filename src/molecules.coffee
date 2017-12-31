@@ -31,7 +31,8 @@ parameters = [
    [ "Hg", 200.590e0*AU,  0e0*EE,   851.0e0*KB,  2.898e0*AA,  25e0*FS ] # 5
    [ "H2",   2.016e0*AU,  0e0*EE,    33.3e0*KB,  2.968e0*AA,   5e0*FS ] # 6
    [ "N2",  28.013e0*AU,  0e0*EE,    91.5e0*KB,  3.681e0*AA,  20e0*FS ] # 7
-   [ "O2",  31.999e0*AU,  0e0*EE,   113.0e0*KB,  3.433e0*AA,  20e0*FS ] # 9
+   [ "O2",  31.999e0*AU,  0e0*EE,   113.0e0*KB,  3.433e0*AA,  20e0*FS ] # 8
+   [ "BP", 200.00e0 *AU,  0.0*EE,   124.0e0*KB, 10.0e0  *AA,  25e0*FS ] # 9
 ]
 exports.parameters = parameters
 # }}}
@@ -47,6 +48,7 @@ colorMap = [
   "0xFF9800" # H2
   "0x673AB7" # N2
   "0x7D6C46" # O2
+  "0x7D6C46" # BP
 ]
 exports.colorMap = colorMap
 # }}}
@@ -80,22 +82,25 @@ class Molecules extends Particle # {{{
     @epsi  = parameters[_key][3]
     @force = ([0..@size]).fill(0e0)
 
-  move: (_dt, _canvas) ->
-    distance = ["min": 0e0, "max": 0e0]
+  move: (_dt, _canvas, _ratio) ->
     for i in [0..@size]
       @velocity[i] += @force[i] / @mass * _dt
       nextPosition = @position[i] + @velocity[i] * _dt
 
-      distance["min"] = nextPosition - @radius
-      distance["max"] = nextPosition + @radius - _canvas[i]
-      if distance["min"] <= 0e0
+      flag = false
+      if nextPosition < @radius
+        flag = true
         @velocity[i] = - @velocity[i]
-#        @position[i] = - _canvas[i] - distance["min"]
-      else if distance["max"] >= 0e0
+        @position[i] = @radius
+      else if nextPosition > _canvas[i] - @radius
+        flag = true
         @velocity[i] = - @velocity[i]
-#        @position[i] = _canvas[i] - distance["max"]
+        @position[i] = _canvas[i] - @radius
       else
         @position[i] = nextPosition
+    if flag is true
+      for i in [0..@size]
+        @velocity[i] = @velocity[i] * _ratio
 
   getEnergy: () ->
     energy = 0e0

@@ -2,11 +2,16 @@ body {
     margin: 0;
 }
 
-div#canvas,
-div#canvas2 {
+div#canvas {
     height: 500px;
     width:  500px;
 }
 
-#time {
+#time,
+#energy {
+    height: 20px;
+}
+
+span {
+    font-size: 10%;
 }

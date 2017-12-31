@@ -56,17 +56,17 @@ main = () ->
     n = width / 20
     displayLenght = 10*n
     sgm = molecules.parameters[1][4]
-    realLength = 1e2 * sgm
+    realLength = 6e1 * sgm
     scale = displayLenght / realLength
 
     canvasThree = [displayLenght, Math.floor(displayLenght*aspect)]
     canvas = [realLength, realLength*aspect]
 
-    # time division (s)
+    bathT = 300e0
     dt = 15e0 * molecules.FS
     v0 = 4e2
     elementID = 2
-    particleNumber = 100 - 1
+    particleNumber = 400
 
     # add particle {{{
     # resize real -> Three
@@ -81,12 +81,15 @@ main = () ->
 
     particle = []
     particleThree = []
+    label = []
+    origin = $('div#canvas').offset()
+    margin = 3
 
     sqrtN = Math.sqrt(particleNumber) + 1
-    for i in [0..particleNumber]
+    for i in [0..particleNumber-1]
         position = [
-            Math.floor(i%sqrtN+1)*canvas[0]/sqrtN + sgm
-            Math.floor(i/sqrtN+1)*canvas[1]/sqrtN + sgm
+            Math.floor(i%sqrtN)*canvas[0]/sqrtN + sgm
+            Math.floor(i/sqrtN)*canvas[1]/sqrtN + sgm
         ]
         particle[i] = new molecules.Molecules(elementID, dim, position, v0)
 
@@ -100,29 +103,47 @@ main = () ->
         positionThree.push(0) if dim is 2
         particleThree[i].position.set(positionThree[0], positionThree[1], positionThree[2])
         scene.add( particleThree[i] )
+
+#        label[i] = $('<span id="label#'+i+'">'+i+'</span>').appendTo('div#canvas')
+#        label[i].offset( (j,r) -> {top: origin["top"]+height-positionThree[1], left: origin["left"]+positionThree[0]} )
+
+    i = particleNumber
+    halfN = Math.floor(particleNumber/2)
+    position = [
+        particle[halfN].position[0] + 5e-1 * (canvas[0] / sqrtN);
+        particle[halfN].position[0] + 5e-1 * (canvas[1] / sqrtN);
+    ]
+    particle[i] = new molecules.Molecules(9, dim, position, v0)
+
+    geometry = new THREE.CircleGeometry( resize(particle[i].radius), 32 )
+    material = new THREE.MeshPhongMaterial()
+    material.color.setHex( parseInt(particle[i].color, 16) )
+
+    particleThree[i] = new THREE.Mesh( geometry, material )
+
+    positionThree = remap(particle[i].position)
+    positionThree.push(0) if dim is 2
+    particleThree[i].position.set(positionThree[0], positionThree[1], positionThree[2])
+    scene.add( particleThree[i] )
+#    label[i] = $('<span id="label#'+i+'">'+i+'</span>').appendTo('div#canvas')
+#    label[i].offset( (j,r) -> {top: origin["top"]+height-positionThree[1], left: origin["left"]+positionThree[0]} )
+
     # }}}
 
-    # add cube {{{
-    geometry = new THREE.BoxGeometry( 20, 20, 20 )
-    material = new THREE.MeshPhongMaterial({color: 0x00cc00})
-    cube = new THREE.Mesh( geometry, material )
-    cube.position.set(3*n,3*n,0)
-    scene.add( cube )
-    # }}}
-
-    t = 0e0
-    animate = () -> # {{{
-        cube.rotation.x += 0.01
-
-        $ -> $('#time').text("t = "+(t*1e9).toFixed(3)+" ns")
-
+    getTemperature = () ->
         KE = 0
         for i in [0..particleNumber]
             KE += particle[i].getEnergy()
         KE = KE / particleNumber / molecules.KB
-        $ -> $('#energy').text("KE = "+KE.toFixed(3)+" K")
 
-        for p in [0..20]
+    t = 0e0
+    animate = () -> # {{{
+        $ -> $('#time').text("t = "+(t*1e9).toFixed(3)+" ns")
+
+        temperature = getTemperature()
+        $ -> $('#energy').text("KE = "+temperature.toFixed(1)+" K")
+
+        for p in [0..10]
             t += dt
             for i in [0..particleNumber]
                 particle[i].force.fill(0)
@@ -132,12 +153,24 @@ main = () ->
                     if j > particleNumber
                         break
                     particle[j].getForce(particle[i])
-                particle[i].move(dt, canvas)
+
+            T = getTemperature()
+            Tr = Math.sqrt(bathT/T)
+            if Tr < 5e-1
+                Tr = 5e-1
+            else if Tr > 1.2e0
+                Tr = 1.2e0
+            for i in [0..particleNumber]
+                particle[i].move(dt, canvas, Tr)
 
         for i in [0..particleNumber]
             positionThree = remap(particle[i].position)
             positionThree.push(0) if dim is 2
             particleThree[i].position.set(positionThree[0], positionThree[1], positionThree[2])
+#            label[i].offset( (j,r) -> {
+#                top: origin["top"]+height+margin-positionThree[1]
+#                left: origin["left"]+margin+positionThree[0]
+#            } )
 
         requestAnimationFrame( animate )
         renderer.render( scene, camera )
@@ -146,17 +179,3 @@ main = () ->
     animate()
 
 main()
-
-$ ->
-    $('h1').css('color', 'red')
-    $('h1').css('background-color', 'blue')
-    $('h1').css('width', '200px')
-    $('.hoge').animate { width: '100px' }, 'fast'
-
-$ 'fuga'
-  .addClass 'active'
-  .css
-    'top': '20px'
-    'left': '300px'
-    'width': '320px'
-    'height': '120px'
