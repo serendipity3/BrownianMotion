@@ -23,6 +23,7 @@ module.exports = {
     {
       Three: 'three'
       jQuery: 'jQuery'
+      datGUI: 'dat.gui'
     }
   ]
 }

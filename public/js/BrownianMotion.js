@@ -71,14 +71,34 @@
 
 
 // THREE = require "three"
-var $, main, molecules;
+var $, bathT, dt, elementID, flagDisplayLabel, flagDisplayParticles, flagDisplayTrajectory, main, margin, molecules, origin, particleNumber, v0;
 
 molecules = __webpack_require__(1);
 
 $ = __webpack_require__(2);
 
+bathT = 300e0;
+
+dt = 15e0 * molecules.FS;
+
+v0 = 4e2;
+
+elementID = 2;
+
+particleNumber = 100;
+
+origin = $('div#canvas').offset();
+
+margin = 3;
+
+flagDisplayParticles = true;
+
+flagDisplayTrajectory = false;
+
+flagDisplayLabel = false;
+
 main = function main() {
-  var _animate, aspect, bathT, camera, canvas, canvasDOM, canvasID, canvasThree, center, d0, dMax, dim, directionalLight, displayLenght, dt, elementID, geometry, getTemperature, gridHelper, halfN, height, i, k, label, margin, material, n, origin, particle, particleNumber, particleThree, position, positionThree, realLength, ref, remap, renderer, resize, scale, scene, sgm, sqrtN, t, v0, width;
+  var _animate, aspect, bathFolder, camera, canvas, canvasDOM, canvasID, canvasThree, center, config, d0, dMax, dim, directionalLight, displayFolder, displayLenght, flame, geometry, getTemperature, gridHelper, gui, halfN, height, i, k, label, labelContainer, material, n, particle, particleThree, pointTrajectory, position, positionThree, realLength, ref, remap, renderer, resize, scale, scene, sgm, sqrtN, stats, t, trajectory, trajectoryMaterial, width;
   // init renderer {{{
   canvasID = 'canvas';
   canvasDOM = document.getElementById(canvasID);
@@ -88,7 +108,10 @@ main = function main() {
   width = parseInt(width, 10);
   //    height = window.innerHeight
   //    width = window.innerWidth
-  renderer = new THREE.WebGLRenderer();
+  renderer = new THREE.WebGLRenderer({
+    alpha: true,
+    antialias: true
+  });
   renderer.setSize(width, height);
   renderer.setClearColor(0xcccccc, 1.0);
   canvasDOM.appendChild(renderer.domElement);
@@ -124,20 +147,63 @@ main = function main() {
   //    scene.add(axesHelper)
   //    # }}}
   // }}}
+  stats = new Stats();
+  stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+  $("#stats").append(stats.dom);
+  $('#time').offset(function (i, r) {
+    return {
+      top: origin["top"],
+      left: origin["left"] + width
+    };
+  });
+  $('#energy').offset(function (i, r) {
+    return {
+      top: origin["top"] + 20,
+      left: origin["left"] + width
+    };
+  });
+  // configure dat.GUI {{{
+  config = {
+    bathTemperature: bathT,
+    displayParticles: flagDisplayParticles,
+    displayTrajectory: flagDisplayTrajectory,
+    displayLabel: flagDisplayLabel
+  };
+  gui = new dat.GUI({
+    autoPlace: false
+  });
+  $("#datGUI").append(gui.domElement);
+  $("#datGUI").offset(function (i, r) {
+    return {
+      top: origin["top"] + 50,
+      left: origin["left"] + width
+    };
+  });
+  bathFolder = gui.addFolder("bath temperature");
+  bathFolder.add(config, 'bathTemperature', 10, 400).onChange(function () {
+    return bathT = config.bathTemperature;
+  });
+  bathFolder.open();
+  displayFolder = gui.addFolder("Display");
+  displayFolder.add(config, 'displayParticles').onChange(function () {
+    return flagDisplayParticles = config.displayParticles;
+  });
+  displayFolder.add(config, 'displayTrajectory').onChange(function () {
+    return flagDisplayTrajectory = config.displayTrajectory;
+  });
+  displayFolder.add(config, 'displayLabel').onChange(function () {
+    return flagDisplayLabel = config.displayLabel;
+  });
+  displayFolder.open();
+  // }}}
   dim = 2;
   n = width / 20;
   displayLenght = 10 * n;
   sgm = molecules.parameters[1][4];
-  realLength = 6e1 * sgm;
+  realLength = 3e1 * sgm;
   scale = displayLenght / realLength;
   canvasThree = [displayLenght, Math.floor(displayLenght * aspect)];
   canvas = [realLength, realLength * aspect];
-  bathT = 300e0;
-  dt = 15e0 * molecules.FS;
-  v0 = 4e2;
-  elementID = 2;
-  particleNumber = 400;
-  // add particle {{{
   // resize real -> Three
   resize = function resize(_r) {
     var dr;
@@ -152,18 +218,25 @@ main = function main() {
     }
     return dq;
   };
+  // add particle {{{
   particle = [];
   particleThree = [];
   label = [];
-  origin = $('div#canvas').offset();
-  margin = 3;
+  labelContainer = $('<div id="particleLabel"></div>').appendTo('div#canvas');
   sqrtN = Math.sqrt(particleNumber) + 1;
   for (i = k = 0, ref = particleNumber - 1; 0 <= ref ? k <= ref : k >= ref; i = 0 <= ref ? ++k : --k) {
     position = [Math.floor(i % sqrtN) * canvas[0] / sqrtN + sgm, Math.floor(i / sqrtN) * canvas[1] / sqrtN + sgm];
     particle[i] = new molecules.Molecules(elementID, dim, position, v0);
     geometry = new THREE.CircleGeometry(resize(particle[i].radius), 32);
-    material = new THREE.MeshPhongMaterial();
-    material.color.setHex(parseInt(particle[i].color, 16));
+    material = new THREE.MeshPhongMaterial({
+      transparent: true,
+      opacity: 1.0
+    });
+    if (flagDisplayParticles === true) {
+      material.color.setHex(parseInt(particle[i].color, 16));
+    } else {
+      material.opacity = 1.0;
+    }
     particleThree[i] = new THREE.Mesh(geometry, material);
     positionThree = remap(particle[i].position);
     if (dim === 2) {
@@ -171,15 +244,27 @@ main = function main() {
     }
     particleThree[i].position.set(positionThree[0], positionThree[1], positionThree[2]);
     scene.add(particleThree[i]);
+    label[i] = $('<span id="label' + i + '">' + i + '</span>').appendTo('div#particleLabel');
+    if (flagDisplayLabel === true) {
+      label[i].offset(function (j, r) {
+        return {
+          top: origin["top"] + height - positionThree[1],
+          left: origin["left"] + positionThree[0]
+        };
+      });
+    } else {
+      labelContainer.remove();
+    }
   }
-  //        label[i] = $('<span id="label#'+i+'">'+i+'</span>').appendTo('div#canvas')
-  //        label[i].offset( (j,r) -> {top: origin["top"]+height-positionThree[1], left: origin["left"]+positionThree[0]} )
   i = particleNumber;
   halfN = Math.floor(particleNumber / 2);
   position = [particle[halfN].position[0] + 5e-1 * (canvas[0] / sqrtN), particle[halfN].position[0] + 5e-1 * (canvas[1] / sqrtN)];
   particle[i] = new molecules.Molecules(9, dim, position, v0);
   geometry = new THREE.CircleGeometry(resize(particle[i].radius), 32);
-  material = new THREE.MeshPhongMaterial();
+  material = new THREE.MeshPhongMaterial({
+    transparent: true,
+    opacity: 1.0
+  });
   material.color.setHex(parseInt(particle[i].color, 16));
   particleThree[i] = new THREE.Mesh(geometry, material);
   positionThree = remap(particle[i].position);
@@ -188,9 +273,17 @@ main = function main() {
   }
   particleThree[i].position.set(positionThree[0], positionThree[1], positionThree[2]);
   scene.add(particleThree[i]);
-  //    label[i] = $('<span id="label#'+i+'">'+i+'</span>').appendTo('div#canvas')
-  //    label[i].offset( (j,r) -> {top: origin["top"]+height-positionThree[1], left: origin["left"]+positionThree[0]} )
+  // }}}
 
+  // trajectory {{{
+  trajectory = [];
+  pointTrajectory = [];
+  pointTrajectory.push(particleThree[i].position.clone());
+  trajectoryMaterial = new THREE.LineBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    opacity: 1.0
+  });
   // }}}
   getTemperature = function getTemperature() {
     var KE, l, ref1;
@@ -201,23 +294,49 @@ main = function main() {
     return KE = KE / particleNumber / molecules.KB;
   };
   t = 0e0;
+  flame = 0;
   _animate = function animate() {
     // {{{
-    var T, Tr, j, l, m, o, p, q, r, ref1, ref2, ref3, ref4, ref5, ref6, s, temperature;
-    $(function () {
-      return $('#time').text("t = " + (t * 1e9).toFixed(3) + " ns");
-    });
+    var T, Tr, j, l, m, o, p, q, ref1, ref10, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, s, temperature, trajectoryGeometry, u, v, w, x, y;
+    flame += 1;
+    stats.begin();
+    $('#time').text("t = " + (t * 1e9).toFixed(3) + " ns");
     temperature = getTemperature();
-    $(function () {
-      return $('#energy').text("KE = " + temperature.toFixed(1) + " K");
-    });
-    for (p = l = 0; l <= 10; p = ++l) {
+    $('#energy').text("kinetic energy = " + temperature.toFixed(1) + " K");
+    if (flagDisplayParticles === true) {
+      for (i = l = 0, ref1 = particleNumber - 1; 0 <= ref1 ? l <= ref1 : l >= ref1; i = 0 <= ref1 ? ++l : --l) {
+        particleThree[i].material.opacity = 1.0;
+      }
+    } else {
+      for (i = m = 0, ref2 = particleNumber - 1; 0 <= ref2 ? m <= ref2 : m >= ref2; i = 0 <= ref2 ? ++m : --m) {
+        particleThree[i].material.opacity = 0.0;
+      }
+    }
+    if (flagDisplayLabel === true) {
+      if ($('div#canvas').children("div#particleLabel").length === 0) {
+        $('div#canvas').append('<div id="particleLabel"></div>');
+        for (i = o = 0, ref3 = particleNumber; 0 <= ref3 ? o <= ref3 : o >= ref3; i = 0 <= ref3 ? ++o : --o) {
+          label[i] = $('<span id="label' + i + '">' + i + '</span>').appendTo('div#particleLabel');
+        }
+      }
+    } else {
+      $('div#canvas').children("div#particleLabel").remove();
+      if ($('div#canvas').children("div#particleLabel").length === !0) {
+        $('div#canvas').children("div#particleLabel").remove();
+      }
+    }
+    if (flagDisplayTrajectory === false) {
+      for (j = q = 0, ref4 = trajectory.length - 1; 0 <= ref4 ? q <= ref4 : q >= ref4; j = 0 <= ref4 ? ++q : --q) {
+        scene.remove(trajectory[j]);
+      }
+    }
+    for (p = s = 0; s <= 5; p = ++s) {
       t += dt;
-      for (i = m = 0, ref1 = particleNumber; 0 <= ref1 ? m <= ref1 : m >= ref1; i = 0 <= ref1 ? ++m : --m) {
+      for (i = u = 0, ref5 = particleNumber; 0 <= ref5 ? u <= ref5 : u >= ref5; i = 0 <= ref5 ? ++u : --u) {
         particle[i].force.fill(0);
       }
-      for (i = o = 0, ref2 = particleNumber; 0 <= ref2 ? o <= ref2 : o >= ref2; i = 0 <= ref2 ? ++o : --o) {
-        for (j = q = ref3 = i + 1, ref4 = particleNumber; ref3 <= ref4 ? q <= ref4 : q >= ref4; j = ref3 <= ref4 ? ++q : --q) {
+      for (i = v = 0, ref6 = particleNumber; 0 <= ref6 ? v <= ref6 : v >= ref6; i = 0 <= ref6 ? ++v : --v) {
+        for (j = w = ref7 = i + 1, ref8 = particleNumber; ref7 <= ref8 ? w <= ref8 : w >= ref8; j = ref7 <= ref8 ? ++w : --w) {
           if (j > particleNumber) {
             break;
           }
@@ -231,21 +350,37 @@ main = function main() {
       } else if (Tr > 1.2e0) {
         Tr = 1.2e0;
       }
-      for (i = r = 0, ref5 = particleNumber; 0 <= ref5 ? r <= ref5 : r >= ref5; i = 0 <= ref5 ? ++r : --r) {
+      for (i = x = 0, ref9 = particleNumber; 0 <= ref9 ? x <= ref9 : x >= ref9; i = 0 <= ref9 ? ++x : --x) {
         particle[i].move(dt, canvas, Tr);
       }
     }
-    for (i = s = 0, ref6 = particleNumber; 0 <= ref6 ? s <= ref6 : s >= ref6; i = 0 <= ref6 ? ++s : --s) {
+    for (i = y = 0, ref10 = particleNumber; 0 <= ref10 ? y <= ref10 : y >= ref10; i = 0 <= ref10 ? ++y : --y) {
       positionThree = remap(particle[i].position);
       if (dim === 2) {
         positionThree.push(0);
       }
       particleThree[i].position.set(positionThree[0], positionThree[1], positionThree[2]);
+      if (flagDisplayLabel === true) {
+        label[i].offset(function (j, r) {
+          return {
+            top: origin["top"] + height + margin - positionThree[1],
+            left: origin["left"] + margin + positionThree[0]
+          };
+        });
+      }
+      if (flame % 10 === 0) {
+        i = particleNumber;
+        pointTrajectory.push(particleThree[i].position.clone());
+        if (flagDisplayTrajectory === true) {
+          trajectoryGeometry = new THREE.Geometry();
+          trajectoryGeometry.vertices.push(pointTrajectory[pointTrajectory.length - 2]);
+          trajectoryGeometry.vertices.push(pointTrajectory[pointTrajectory.length - 1]);
+          trajectory.push(new THREE.Line(trajectoryGeometry, trajectoryMaterial));
+          scene.add(trajectory[trajectory.length - 1]);
+        }
+      }
     }
-    //            label[i].offset( (j,r) -> {
-    //                top: origin["top"]+height+margin-positionThree[1]
-    //                left: origin["left"]+margin+positionThree[0]
-    //            } )
+    stats.end();
     requestAnimationFrame(_animate);
     return renderer.render(scene, camera);
   };
