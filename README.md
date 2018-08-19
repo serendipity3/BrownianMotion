@@ -3,6 +3,9 @@ javascript for a physics simulation of Brownian motion using Three.js and jQuery
 
 + node.js v8.9.0
 
+# DEMO
+<http://spintronics.jp/bm/>
+
 ## Usage
 See `public/index.html`.
 
